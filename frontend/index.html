@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>3D Building Digital Twin</title>
+  <style> body { margin: 0; overflow: hidden; } </style>
+</head>
+<body>
+
+<div id="health-info" style="position:fixed;top:10px;left:10px;background:#fff;padding:10px;border-radius:5px;z-index:10;">
+  <b>Building Health:</b> <span id="building-health">-</span><br>
+  <b>Pillars:</b>
+  <ul id="pillar-list"></ul>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js"></script>
+
+<script>
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,1000);
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth,window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const light = new THREE.PointLight(0xffffff, 1);
+light.position.set(10,10,10);
+scene.add(light);
+
+const floor = new THREE.Mesh(
+  new THREE.BoxGeometry(10,0.5,10),
+  new THREE.MeshStandardMaterial({color:0x555555})
+);
+scene.add(floor);
+
+const pillars = {};
+
+function createPillar(x,z,name){
+  const mat = new THREE.MeshStandardMaterial({color:0x00ff00});
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(1,5,1),mat);
+  mesh.position.set(x,2.5,z);
+  scene.add(mesh);
+  pillars[name] = mesh;
+}
+
+createPillar(-3,-3,"P1");
+createPillar(3,-3,"P2");
+createPillar(-3,3,"P3");
+createPillar(3,3,"P4");
+
+camera.position.z = 12;
+
+function updateColor(name, health){
+  let color = 0x00ff00;
+  if(health < 70) color = 0xff9900;
+  if(health < 40) color = 0xff0000;
+  pillars[name].material.color.setHex(color);
+}
+
+const ws = new WebSocket("ws://127.0.0.1:8000/ws");
+
+ws.onopen = function() {
+    console.log("WebSocket connection established");
+};
+
+ws.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    document.getElementById("building-health").textContent = data.building_health.toFixed(2);
+    const pillarList = document.getElementById("pillar-list");
+    pillarList.innerHTML = "";
+    Object.keys(data.pillars).forEach(p=>{
+      updateColor(p, data.pillars[p].health);
+      const li = document.createElement("li");
+      li.textContent = p + ": " + data.pillars[p].health.toFixed(2);
+      pillarList.appendChild(li);
+    });
+};
+
+ws.onerror = function(error) {
+    console.error("WebSocket error:", error);
+};
+
+ws.onclose = function() {
+    console.log("WebSocket connection closed");
+};
+
+function animate(){
+  requestAnimationFrame(animate);
+  scene.rotation.y += 0.002;
+  renderer.render(scene,camera);
+}
+animate();
+</script>
+
+</body>
+</html>
