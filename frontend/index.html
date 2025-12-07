@@ -10,6 +10,7 @@
   <b>Building Health:</b> <span id="building-health">-</span><br>
   <b>Pillars:</b>
   <ul id="pillar-list"></ul>
+  <div><b>Model:</b> <span id="model-status">-</span></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js"></script>
@@ -63,7 +64,9 @@ ws.onopen = function() {
 
 ws.onmessage = function(event) {
     const data = JSON.parse(event.data);
-    document.getElementById("building-health").textContent = data.building_health.toFixed(2);
+    // backend sends overall_health
+    const overall = data.overall_health ?? data.building_health ?? 0;
+    document.getElementById("building-health").textContent = Number(overall).toFixed(2);
     const pillarList = document.getElementById("pillar-list");
     pillarList.innerHTML = "";
     Object.keys(data.pillars).forEach(p=>{
@@ -72,6 +75,13 @@ ws.onmessage = function(event) {
       li.textContent = p + ": " + data.pillars[p].health.toFixed(2);
       pillarList.appendChild(li);
     });
+      // show model details if present
+      if (data.model) {
+        const m = data.model;
+        // append model status
+        const statusEl = document.getElementById('model-status');
+        if (statusEl) statusEl.textContent = `${m.status} (${m.health_score})`;
+      }
 };
 
 ws.onerror = function(error) {

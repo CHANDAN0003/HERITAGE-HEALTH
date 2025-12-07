@@ -6,7 +6,7 @@ import json
 import time
 import numpy as np
 
-from .model import predict
+from ml.predict import score_payload
 from .digital_twin import BuildingTwin
 
 app = FastAPI()
@@ -27,23 +27,26 @@ async def websocket_endpoint(websocket: WebSocket):
         with open("data/live.json") as f:
             data = json.load(f)
 
-        ax = np.array(data["ax"])
+        # Use the new ML predictor which returns health_score and details
+        result = score_payload(data, fs=200)
+        if "error" in result:
+            model_score = 0.0
+            health = 100
+        else:
+            model_score = float(result.get("score", 0.0))
+            health = int(result.get("health_score", 100))
 
-        features = [
-            float(np.mean(ax)),
-            float(np.std(ax)),
-            float(np.max(ax)),
-            float(np.min(ax))
-        ]
+        # Convert health to a normalized anomaly metric (0..1)
+        anomaly_metric = (100 - health) / 100.0
 
-        y, score = predict(features)
-
-        twin.update_pillar("P1", score)
-        twin.update_pillar("P2", score / 2)
-        twin.update_pillar("P3", score / 3)
-        twin.update_pillar("P4", score / 4)
+        twin.update_pillar("P1", anomaly_metric)
+        twin.update_pillar("P2", anomaly_metric / 2)
+        twin.update_pillar("P3", anomaly_metric / 3)
+        twin.update_pillar("P4", anomaly_metric / 4)
 
         twin.update_building_health()
 
-        await websocket.send_json(twin.get_state())
+        payload = twin.get_state()
+        payload["model"] = result
+        await websocket.send_json(payload)
         await asyncio.sleep(2)
